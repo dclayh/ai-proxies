@@ -11,7 +11,7 @@ load_dotenv()
 DATABRICKS_HOST = os.getenv('DATABRICKS_HOST')
 DATABRICKS_TOKEN = os.getenv('DATABRICKS_TOKEN')
 SERVING_ENDPOINT = os.getenv('SERVING_ENDPOINT')
-PROXY_PORT = int(os.getenv('PROXY_PORT', '8000'))
+PROXY_PORT = int(os.getenv('ANTHROPICPROXY_PORT'))
 
 # Validate required environment variables
 required_vars = ['DATABRICKS_HOST', 'DATABRICKS_TOKEN', 'SERVING_ENDPOINT']
@@ -24,7 +24,7 @@ class ProxyHandler(BaseHTTPRequestHandler):
         # 1. Read the request from the client
         content_length = int(self.headers['Content-Length'])
         post_data = self.rfile.read(content_length)
-        
+
         try:
             claude_payload = json.loads(post_data.decode('utf-8'))
         except json.JSONDecodeError:
@@ -39,7 +39,7 @@ class ProxyHandler(BaseHTTPRequestHandler):
 
         # 3. Forward the request to Databricks
         databricks_url = f"{DATABRICKS_HOST}/serving-endpoints/{SERVING_ENDPOINT}/invocations"
-        
+
         try:
             response = requests.post(
                 databricks_url,
@@ -83,7 +83,7 @@ class ProxyHandler(BaseHTTPRequestHandler):
             "max_tokens": 1000,
             "temperature": 0.7
         }
-        
+
         Databricks format:
         {
             "dataframe_records": [
@@ -115,4 +115,4 @@ if __name__ == '__main__':
     server_address = ('', PROXY_PORT)
     httpd = HTTPServer(server_address, ProxyHandler)
     print(f"Starting Databricks Claude proxy server on port {PROXY_PORT}")
-    httpd.serve_forever() 
+    httpd.serve_forever()
