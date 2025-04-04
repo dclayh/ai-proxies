@@ -2,12 +2,22 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 import json
 import requests
 import os
+from dotenv import load_dotenv
 
-# Configuration
-DATABRICKS_HOST = "<YOUR_DATABRICKS_HOST>"  # e.g., "https://your-workspace.cloud.databricks.com"
-DATABRICKS_TOKEN = "<YOUR_DATABRICKS_TOKEN>"
-SERVING_ENDPOINT = "<YOUR_SERVING_ENDPOINT_NAME>"
-PROXY_PORT = 8000
+# Load environment variables from .env file
+load_dotenv()
+
+# Configuration from environment variables
+DATABRICKS_HOST = os.getenv('DATABRICKS_HOST')
+DATABRICKS_TOKEN = os.getenv('DATABRICKS_TOKEN')
+SERVING_ENDPOINT = os.getenv('SERVING_ENDPOINT')
+PROXY_PORT = int(os.getenv('PROXY_PORT', '8000'))
+
+# Validate required environment variables
+required_vars = ['DATABRICKS_HOST', 'DATABRICKS_TOKEN', 'SERVING_ENDPOINT']
+missing_vars = [var for var in required_vars if not os.getenv(var)]
+if missing_vars:
+    raise ValueError(f"Missing required environment variables: {', '.join(missing_vars)}")
 
 class ProxyHandler(BaseHTTPRequestHandler):
     def do_POST(self):
