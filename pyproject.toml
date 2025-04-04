@@ -1,0 +1,14 @@
+[tool.poetry]
+name = "ai-proxies"
+version = "0.1.0"
+description = "A collection of proxy servers for various AI services"
+authors = ["Clay Hambrick <dclayh@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.8"
+requests = "^2.31.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api" 
