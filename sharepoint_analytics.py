@@ -5,6 +5,8 @@ import pandas as pd
 from azure.identity import InteractiveBrowserCredential
 from msgraph import GraphServiceClient
 from dotenv import load_dotenv
+from msgraph.generated.sites.sites_request_builder import SitesRequestBuilder
+from msgraph.generated.models.site import Site
 
 # Load environment variables
 load_dotenv()
@@ -19,31 +21,44 @@ async def get_sites(graph_client):
     sites = []
     
     try:
-        # Use get_all_sites to get all sites
-        print("Getting all sites...")
-        sites_response = await graph_client.sites.get_all_sites.get()
-        
-        # Process the response
-        if sites_response and sites_response.value:
-            print(f"Found {len(sites_response.value)} sites")
-            for site in sites_response.value:
-                sites.append(site)
-                print(f"Site: {site.display_name} (ID: {site.id})")
+        print("Trying to get all sites using a query...")
+        try:
+            # Use a query to get all sites with the correct parameter name
+            # Create request configuration with search parameter
+            request_config = SitesRequestBuilder.SitesRequestBuilderGetQueryParameters(
+                search="*"
+            )
             
-            # Handle pagination if needed
-            while sites_response.odata_next_link:
-                print("Fetching next page of sites...")
-                next_request = graph_client.sites.with_url(sites_response.odata_next_link)
-                sites_response = await next_request.get()
-                if sites_response and sites_response.value:
-                    for site in sites_response.value:
-                        if not any(s.id == site.id for s in sites):
-                            sites.append(site)
-                            print(f"Site: {site.display_name} (ID: {site.id})")
-        else:
-            print("No sites found in the response")
+            # Get sites with the request configuration
+            sites_response = await graph_client.sites.get(request_configuration=request_config)
+            
+            # Process the response
+            if sites_response and sites_response.value:
+                print(f"Found {len(sites_response.value)} sites")
+                for site in sites_response.value:
+                    if not any(s.id == site.id for s in sites):
+                        sites.append(site)
+                        print(f"Site: {site.display_name} (ID: {site.id})")
+                
+                # Handle pagination if needed
+                while sites_response.odata_next_link:
+                    print("Fetching next page of sites...")
+                    next_request = graph_client.sites.with_url(sites_response.odata_next_link)
+                    sites_response = await next_request.get()
+                    if sites_response and sites_response.value:
+                        for site in sites_response.value:
+                            if not any(s.id == site.id for s in sites):
+                                sites.append(site)
+                                print(f"Site: {site.display_name} (ID: {site.id})")
+            else:
+                print("No sites found in the response")
+        except Exception as e:
+            print(f"Error getting all sites: {e}")
+            print("This might indicate permission issues. Required permissions: Sites.Read.All")
+            
+         
     except Exception as e:
-        print(f"Error getting sites: {e}")
+        print(f"Error in get_sites: {e}")
     
     print(f"Total sites found: {len(sites)}")
     return sites
