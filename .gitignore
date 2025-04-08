@@ -36,9 +36,6 @@ venv.bak/
 *.swo
 .DS_Store
 
-# Poetry
-poetry.lock
-
 # Logs
 *.log
-logs/ 
+logs/
