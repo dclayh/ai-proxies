@@ -19,23 +19,16 @@ async def get_sites(graph_client):
     sites = []
     
     try:
-        # Try to get the root site first
-        print("Getting root site...")
-        root_site = await graph_client.sites.root.get()
-        print(f"Root site found: {root_site.display_name} (ID: {root_site.id})")
-        sites.append(root_site)
-        
-        # Now try to get all sites
+        # Use get_all_sites to get all sites
         print("Getting all sites...")
-        sites_response = await graph_client.sites.get()
+        sites_response = await graph_client.sites.get_all_sites.get()
         
         # Process the response
         if sites_response and sites_response.value:
             print(f"Found {len(sites_response.value)} sites")
             for site in sites_response.value:
-                if site.id != root_site.id:  # Avoid duplicates
-                    sites.append(site)
-                    print(f"Site: {site.display_name} (ID: {site.id})")
+                sites.append(site)
+                print(f"Site: {site.display_name} (ID: {site.id})")
             
             # Handle pagination if needed
             while sites_response.odata_next_link:
@@ -44,7 +37,7 @@ async def get_sites(graph_client):
                 sites_response = await next_request.get()
                 if sites_response and sites_response.value:
                     for site in sites_response.value:
-                        if site.id != root_site.id and not any(s.id == site.id for s in sites):
+                        if not any(s.id == site.id for s in sites):
                             sites.append(site)
                             print(f"Site: {site.display_name} (ID: {site.id})")
         else:
