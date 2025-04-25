@@ -1,6 +1,7 @@
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import json
 import requests
+from requests.auth import HTTPBasicAuth
 import os
 from dotenv import load_dotenv
 
@@ -36,7 +37,6 @@ class ProxyHandler(BaseHTTPRequestHandler):
 
         # 2. Transform the request for Databricks
         databricks_payload = self.transform_request(claude_payload)
-
         # 3. Forward the request to Databricks
         databricks_url = f"{DATABRICKS_HOST}/serving-endpoints/{SERVING_ENDPOINT}/invocations"
 
@@ -45,11 +45,9 @@ class ProxyHandler(BaseHTTPRequestHandler):
                 databricks_url,
                 headers={
                     "Content-Type": "application/json",
-                    "Authorization": f"Bearer {DATABRICKS_TOKEN}",
-                    "Accept": "text/event-stream",
                 },
-                json=databricks_payload,
-                stream=True
+                auth=HTTPBasicAuth("token", DATABRICKS_TOKEN),
+                json=databricks_payload
             )
             response.raise_for_status()
 
@@ -72,44 +70,8 @@ class ProxyHandler(BaseHTTPRequestHandler):
             return
 
     def transform_request(self, claude_payload):
-        """
-        Transform Claude API format to Databricks format
-        Claude format:
-        {
-            "messages": [
-                {"role": "user", "content": "Hello"},
-                {"role": "assistant", "content": "Hi there"}
-            ],
-            "max_tokens": 1000,
-            "temperature": 0.7
-        }
-
-        Databricks format:
-        {
-            "dataframe_records": [
-                {
-                    "messages": [...],
-                    "max_tokens": 1000,
-                    "temperature": 0.7
-                }
-            ]
-        }
-        """
-        # Extract the parameters from Claude payload
-        messages = claude_payload.get("messages", [])
-        max_tokens = claude_payload.get("max_tokens", 1000)
-        temperature = claude_payload.get("temperature", 0.7)
-
-        # Create the Databricks format
-        databricks_payload = {
-            "dataframe_records": [{
-                "messages": messages,
-                "max_tokens": max_tokens,
-                "temperature": temperature
-            }]
-        }
-
-        return databricks_payload
+        del claude_payload["stream_options"]
+        return claude_payload
 
 if __name__ == '__main__':
     server_address = ('', PROXY_PORT)
