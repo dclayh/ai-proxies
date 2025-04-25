@@ -12,7 +12,7 @@ load_dotenv()
 DATABRICKS_HOST = os.getenv('DATABRICKS_HOST')
 DATABRICKS_TOKEN = os.getenv('DATABRICKS_TOKEN')
 SERVING_ENDPOINT = os.getenv('SERVING_ENDPOINT')
-PROXY_PORT = int(os.getenv('ANTHROPIC_PROXY_PORT'))
+PROXY_PORT = int(os.getenv('PROXY_PORT'))
 
 # Validate required environment variables
 required_vars = ['DATABRICKS_HOST', 'DATABRICKS_TOKEN', 'SERVING_ENDPOINT']
