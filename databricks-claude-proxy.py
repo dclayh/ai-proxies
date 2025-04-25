@@ -47,30 +47,75 @@ class ProxyHandler(BaseHTTPRequestHandler):
                     "Content-Type": "application/json",
                 },
                 auth=HTTPBasicAuth("token", DATABRICKS_TOKEN),
-                json=databricks_payload
+                json=databricks_payload,
+                stream=True  # Enable streaming mode
             )
-            response.raise_for_status()
+            response.raise_for_status() # Check for HTTP errors like 4xx/5xx
 
-            # Set headers for SSE streaming
-            self.send_response(200)
+            # Check if the response content type indicates a stream
+            content_type = response.headers.get('Content-Type', '')
+            if 'event-stream' not in content_type:
+                # If not a stream, read the whole response and send it back
+                self.send_response(response.status_code)
+                for header, value in response.headers.items():
+                     # Avoid forwarding chunked encoding header as the server will handle it
+                    if header.lower() != 'transfer-encoding':
+                        self.send_header(header, value)
+                self.end_headers()
+                self.wfile.write(response.content)
+                return
+
+            # --- Handle SSE stream ---
+            self.send_response(200) # Assuming success if streaming starts
             self.send_header('Content-type', 'text/event-stream')
             self.send_header('Cache-Control', 'no-cache')
+            # Potentially forward other relevant headers from Databricks response?
             self.end_headers()
 
-            # Stream the Databricks response back to the client
-            for line in response.iter_lines():
-                if line:
-                    self.wfile.write(line + b'\n')
+            # Stream the Databricks response back to the client chunk by chunk
+            for chunk in response.iter_content(chunk_size=None):
+                if chunk:
+                    self.wfile.write(chunk)
+                    # Flush the buffer to ensure data is sent immediately (important for streaming)
+                    self.wfile.flush()
 
         except requests.exceptions.RequestException as e:
-            self.send_response(502)
+            # Try to get error details from response if available
+            error_message = f"Error communicating with Databricks: {e}"
+            try:
+                # If the request failed but we got a response object
+                if 'response' in locals() and response is not None:
+                     error_detail = response.text
+                     error_message += f"\nDatabricks Response: {error_detail}"
+                     self.send_response(response.status_code)
+                else:
+                     self.send_response(502) # Bad Gateway
+
+            except Exception: # Fallback if reading response fails
+                 self.send_response(502) # Bad Gateway
+
             self.send_header('Content-type', 'text/plain')
             self.end_headers()
-            self.wfile.write(f"Error communicating with Databricks: {e}".encode('utf-8'))
+            self.wfile.write(error_message.encode('utf-8'))
+            print(f"Error: {error_message}") # Log the error server-side too
             return
+        except Exception as e: # Catch unexpected errors during streaming/writing
+             print(f"Unexpected error during streaming: {e}")
+             # If headers haven't been sent, send an error response
+             if not self.headers_sent:
+                 self.send_response(500)
+                 self.send_header('Content-type', 'text/plain')
+                 self.end_headers()
+                 self.wfile.write(f"Internal Server Error: {e}".encode('utf-8'))
+             # Otherwise, we can't send a new status code, just log it. The connection might be broken.
+             return
 
     def transform_request(self, claude_payload):
-        del claude_payload["stream_options"]
+        # Example: Remove a field not supported by Databricks
+        # This field caused issues with the Databricks endpoint
+        if "stream_options" in claude_payload:
+             del claude_payload["stream_options"]
+        # Add any other necessary transformations here
         return claude_payload
 
 if __name__ == '__main__':
