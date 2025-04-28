@@ -3,28 +3,34 @@ import json
 import requests
 from requests.auth import HTTPBasicAuth
 import os
+import argparse
 from dotenv import load_dotenv
+
+# Parse command line arguments
+parser = argparse.ArgumentParser(description='Databricks Claude Proxy Server')
+parser.add_argument('--debug', action='store_true', help='Enable debug mode to print incoming requests')
+parser.add_argument('--port', type=int, default=8800, help='Port to run the proxy server on (overrides PROXY_PORT env variable)')
+args = parser.parse_args()
 
 # Load environment variables from .env file
 load_dotenv()
 
 # Configuration from environment variables
-DATABRICKS_HOST = os.getenv('DATABRICKS_HOST')
-DATABRICKS_TOKEN = os.getenv('DATABRICKS_TOKEN')
-SERVING_ENDPOINT = os.getenv('SERVING_ENDPOINT')
-PROXY_PORT = int(os.getenv('PROXY_PORT'))
-
-# Validate required environment variables
-required_vars = ['DATABRICKS_HOST', 'DATABRICKS_TOKEN', 'SERVING_ENDPOINT']
-missing_vars = [var for var in required_vars if not os.getenv(var)]
-if missing_vars:
-    raise ValueError(f"Missing required environment variables: {', '.join(missing_vars)}")
+DATABRICKS_HOST = os.getenv('DATABRICKS_HOST', "https://adb-7891337736584897.17.azuredatabricks.net")
 
 class ProxyHandler(BaseHTTPRequestHandler):
     def do_POST(self):
         # 1. Read the request from the client
         content_length = int(self.headers['Content-Length'])
         post_data = self.rfile.read(content_length)
+
+        # Print request details if debug mode is enabled
+        if args.debug:
+            print(f"\n--- Incoming Request ---")
+            print(f"URI: {self.path}")
+            print(f"Headers: {self.headers}")
+            print(f"Payload: {post_data.decode('utf-8')}")
+            print("----------------------\n")
 
         try:
             claude_payload = json.loads(post_data.decode('utf-8'))
@@ -38,7 +44,9 @@ class ProxyHandler(BaseHTTPRequestHandler):
         # 2. Transform the request for Databricks
         databricks_payload = self.transform_request(claude_payload)
         # 3. Forward the request to Databricks
-        databricks_url = f"{DATABRICKS_HOST}/serving-endpoints/{SERVING_ENDPOINT}/invocations"
+        serving_endpoint = claude_payload["model"]
+        databricks_url = f"{DATABRICKS_HOST}/serving-endpoints/{serving_endpoint}/invocations"
+        databricks_token = self.headers["authorization"].split()[1]
 
         try:
             response = requests.post(
@@ -46,7 +54,7 @@ class ProxyHandler(BaseHTTPRequestHandler):
                 headers={
                     "Content-Type": "application/json",
                 },
-                auth=HTTPBasicAuth("token", DATABRICKS_TOKEN),
+                auth=HTTPBasicAuth("token", databricks_token),
                 json=databricks_payload,
                 stream=True  # Enable streaming mode
             )
@@ -119,7 +127,9 @@ class ProxyHandler(BaseHTTPRequestHandler):
         return claude_payload
 
 if __name__ == '__main__':
-    server_address = ('', PROXY_PORT)
+    server_address = ('', args.port)
     httpd = HTTPServer(server_address, ProxyHandler)
-    print(f"Starting Databricks Claude proxy server on port {PROXY_PORT}")
+    print(f"Starting Databricks Claude proxy server on port {args.port}")
+    if args.debug:
+        print("Debug mode enabled - all incoming requests will be printed")
     httpd.serve_forever()
